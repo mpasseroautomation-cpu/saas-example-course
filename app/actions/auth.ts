@@ -36,25 +36,43 @@ export async function signup(formData: FormData) {
     return { error: error.message }
   }
 
-  return { success: "Check your email to confirm your account!" }
+  return { success: 'Check your email to confirm your account!' }
 }
 
 export async function signout() {
   const supabase = await createClient()
   await supabase.auth.signOut()
-  
+
   redirect('/login')
 }
 
-export async function updatePassword(password: string) {
+export async function updatePassword(currentPassword: string, newPassword: string) {
+  if (typeof newPassword !== 'string' || newPassword.length < 8) {
+    return { error: 'New password must be at least 8 characters long' }
+  }
+  if (typeof currentPassword !== 'string' || currentPassword.length === 0) {
+    return { error: 'Current password is required' }
+  }
+
   const supabase = await createClient()
 
-  const { error } = await supabase.auth.updateUser({
-    password: password
-  })
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError || !userData.user?.email) {
+    return { error: 'You must be signed in to change your password' }
+  }
 
+  const { error: reauthError } = await supabase.auth.signInWithPassword({
+    email: userData.user.email,
+    password: currentPassword,
+  })
+  if (reauthError) {
+    return { error: 'Current password is incorrect' }
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
   if (error) {
-    return { error: error.message }
+    console.error('updatePassword failed', { name: error.name })
+    return { error: 'Could not update password. Please try again.' }
   }
 
   return { success: true }
